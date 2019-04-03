@@ -18,7 +18,7 @@ DEFAULT_LABEL_CSV = os.path.join(SCRIPT_PATH, '../image-data/labels-map.csv')
 DEFAULT_LABEL_FILE = os.path.join(SCRIPT_PATH,
                                   '../labels/2350-common-hangul.txt')
 DEFAULT_OUTPUT_DIR = os.path.join(SCRIPT_PATH, '../tfrecords-output')
-DEFAULT_NUM_SHARDS_TRAIN = 3
+DEFAULT_NUM_SHARDS_TRAIN = 1
 DEFAULT_NUM_SHARDS_TEST = 1
 
 
@@ -109,8 +109,13 @@ class TFRecordsConverter(object):
         Writes out TFRecords file.
         TFRecord 파일을 작성한다.
         """
+        # TFRecord를 작성하는 객체를 생성
         writer = tf.python_io.TFRecordWriter(output_path)
+
+        # indices는 저장할 인덱스 번호가 나열된 리스트로,
+        # indices로부터 해당 샤드의 tfrecord 파일에 저장할 image 인덱스를 가져옴
         for i in indices:
+            # 해당 인덱스의 파일 이름과 레이블 정보를 가져오고, 파일을 읽음
             filename = self.filenames[i]
             label = self.labels[i]
             with tf.gfile.FastGFile(filename, 'rb') as f:
@@ -140,7 +145,7 @@ class TFRecordsConverter(object):
         Here, we partition the data into a training and testing set, then
         divide each data set into the specified number of TFRecords shards.
         여기서는 데이터를 학습용과 테스트용 셋으로 분할한 다음,
-        각 데이터 셋을 지정된 수의 TFRecords 셰이드로 나눈다.
+        각 데이터 셋을 지정된 수의 TFRecords 샤드로 나눈다.
         """
 
         num_files_total = len(self.filenames)
@@ -155,20 +160,29 @@ class TFRecordsConverter(object):
 
         print('Processing training set TFRecords...')
 
+        ## training dataset tfrecord 저장
         # shard 당 몇 개의 파일을 저장해야할 지 계산
-        files_per_shard = int(math.ceil(num_files_train /
-                                        self.num_shards_train))
+        files_per_shard = int(math.ceil(num_files_train / self.num_shards_train))
+
+        # 샤드에 저장할 이미지들의 인덱스 시작 번호
         start = 0
+        # 주어진 shard 개수만큼 train tfrecord 파일 생성
         for i in range(1, self.num_shards_train):
+            # 저장할 tfrecord 파일 경로 지정
             shard_path = os.path.join(self.output_dir,
                                       'train-{}.tfrecords'.format(str(i)))
             # Get a subset of indices to get only a subset of images/labels for
             # the current shard file.
+            # 현재 샤드 파일에 대한 이미지 / 레이블의 서브셋만 얻기위해 인덱스의 서브셋을 가져옵니다.
             file_indices = np.arange(start, start+files_per_shard, dtype=int)
+            # 다음 샤드를 위해 인덱스 시작 번호 갱신
             start = start + files_per_shard
+            # tfrecord 파일 작성
             self.write_tfrecords_file(shard_path, file_indices)
 
         # The remaining images will go in the final shard.
+        # 남아있는 이미지들은 마지막 샤드로 갑니다.
+        # 저장하는 방식은 위와 동일
         file_indices = np.arange(start, num_files_train, dtype=int)
         final_shard_path = os.path.join(self.output_dir,
                                         'train-{}.tfrecords'.format(
@@ -177,6 +191,8 @@ class TFRecordsConverter(object):
 
         print('Processing testing set TFRecords...')
 
+        ## testing dataset tfrecord 저장
+        # 저장방식은 위 training dataset tfrecord 저장과 동일
         files_per_shard = math.ceil(num_files_test / self.num_shards_test)
         start = num_files_train
         for i in range(1, self.num_shards_test):
